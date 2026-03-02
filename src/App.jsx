@@ -45,6 +45,7 @@ const defaultData = () => ({
   streak: { current: 0, best: 0, lastDate: null },
   sabak: [],      // [{ date, surahIndex, fromAyah, toAyah, surahName }]
   sabakDhor: [],  // [{ date, type:"precise"|"juz", surahIndex?, fromAyah?, toAyah?, surahName?, juzIndex?, juzName? }]
+  dhor: [],       // [{ date, quarterIndex, quarterName }]
 });
 
 function loadLocal() {
@@ -84,6 +85,7 @@ const themes = {
     heatEmpty: "#e2e8f0", heatL1: "#bbf7d0", heatL2: "#86efac", heatL3: "#22c55e", heatL4: "#166534",
     sabakBg: "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
     dhorBg: "linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)",
+    dhorSectionBg: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
   },
   dark: {
     bg: "#0a1f0a", bgCard: "#112211", bgCardAlt: "#152a15",
@@ -97,6 +99,7 @@ const themes = {
     heatEmpty: "#1a2e1a", heatL1: "#052e16", heatL2: "#14532d", heatL3: "#166534", heatL4: "#22c55e",
     sabakBg: "linear-gradient(135deg, #064e3b 0%, #0f766e 100%)",
     dhorBg: "linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%)",
+    dhorSectionBg: "linear-gradient(135deg, #92400e 0%, #d97706 100%)",
   }
 };
 
@@ -111,6 +114,7 @@ function CalendarHeatmap({ data, theme: t }) {
     Object.values(data.readings).forEach(r => r.logs.forEach(l => { countByDate[l] = (countByDate[l] || 0) + 1; }));
     (data.sabak || []).forEach(s => { countByDate[s.date] = (countByDate[s.date] || 0) + 1; });
     (data.sabakDhor || []).forEach(s => { countByDate[s.date] = (countByDate[s.date] || 0) + 1; });
+    (data.dhor || []).forEach(s => { countByDate[s.date] = (countByDate[s.date] || 0) + 1; });
     const days = [];
     const cur = new Date(start);
     while (cur <= end) { const ds = cur.toISOString().split("T")[0]; days.push({ date: ds, count: countByDate[ds] || 0, day: cur.getDay() }); cur.setDate(cur.getDate() + 1); }
@@ -297,6 +301,7 @@ export default function App() {
     Object.values(data.readings).forEach(r => { c += r.logs.filter(l => l === td).length; });
     c += (data.sabak || []).filter(s => s.date === td).length;
     c += (data.sabakDhor || []).filter(s => s.date === td).length;
+    c += (data.dhor || []).filter(s => s.date === td).length;
     return c;
   }, [data]);
 
@@ -309,6 +314,7 @@ export default function App() {
       Object.values(data.readings).forEach(r => { count += r.logs.filter(l => l === ds).length; });
       count += (data.sabak || []).filter(s => s.date === ds).length;
       count += (data.sabakDhor || []).filter(s => s.date === ds).length;
+      count += (data.dhor || []).filter(s => s.date === ds).length;
       days.push({ day: d.toLocaleDateString("en", { weekday: "short" }), count, date: ds });
     }
     return days;
@@ -317,7 +323,9 @@ export default function App() {
   // ── SABAK & SABAK DHOR VIEW ──
   const SabakView = () => {
     const isSabak = sabakTab === "sabak";
-    const entries = isSabak ? (data.sabak || []) : (data.sabakDhor || []);
+    const isSabakDhor = sabakTab === "sabakDhor";
+    const isDhor = sabakTab === "dhor";
+    const entries = isSabak ? (data.sabak || []) : isSabakDhor ? (data.sabakDhor || []) : (data.dhor || []);
 
     // Get last sabak entry to auto-fill "from"
     const lastSabak = useMemo(() => {
@@ -336,6 +344,9 @@ export default function App() {
     const [dhorFromAyah, setDhorFromAyah] = useState("");
     const [dhorToAyah, setDhorToAyah] = useState("");
     const [dhorJuzIdx, setDhorJuzIdx] = useState("");
+
+    // Dhor (by quarter) form state
+    const [dhorQuarterIdx, setDhorQuarterIdx] = useState("");
 
     // Auto-fill sabak from last entry
     useEffect(() => {
@@ -372,7 +383,7 @@ export default function App() {
       setToAyah("");
     };
 
-    const handleDhorSubmit = () => {
+    const handleSabakDhorSubmit = () => {
       if (dhorMode === "precise") {
         if (dhorSurahIdx === "" || !dhorFromAyah || !dhorToAyah) return;
         const si = parseInt(dhorSurahIdx), fa = parseInt(dhorFromAyah), ta = parseInt(dhorToAyah);
@@ -380,16 +391,27 @@ export default function App() {
         updateData(d => {
           if (!d.sabakDhor) d.sabakDhor = [];
           d.sabakDhor.push({ date: getToday(), type: "precise", surahIndex: si, fromAyah: fa, toAyah: ta, surahName: `${si + 1}. ${SURAHS[si]}` });
-        }, `Dhor: ${SURAHS[parseInt(dhorSurahIdx)]} ${dhorFromAyah}-${dhorToAyah}`);
+        }, `Sabak Dhor: ${SURAHS[parseInt(dhorSurahIdx)]} ${dhorFromAyah}-${dhorToAyah}`);
       } else {
         if (dhorJuzIdx === "") return;
         const ji = parseInt(dhorJuzIdx);
         updateData(d => {
           if (!d.sabakDhor) d.sabakDhor = [];
           d.sabakDhor.push({ date: getToday(), type: "juz", juzIndex: ji, juzName: `Juz ${ji + 1}` });
-        }, `Dhor: Juz ${parseInt(dhorJuzIdx) + 1}`);
+        }, `Sabak Dhor: Juz ${parseInt(dhorJuzIdx) + 1}`);
       }
       setDhorFromAyah(""); setDhorToAyah("");
+    };
+
+    const handleDhorSubmit = () => {
+      if (dhorQuarterIdx === "") return;
+      const qi = parseInt(dhorQuarterIdx);
+      const qName = `Juz ${Math.floor(qi / 4) + 1}, Q${(qi % 4) + 1}`;
+      updateData(d => {
+        if (!d.dhor) d.dhor = [];
+        d.dhor.push({ date: getToday(), quarterIndex: qi, quarterName: qName });
+      }, `Dhor: ${qName}`);
+      setDhorQuarterIdx("");
     };
 
     // Calculate total ayahs memorized (sabak)
@@ -407,24 +429,31 @@ export default function App() {
 
     const surahOptions = SURAHS.map((s, i) => ({ value: String(i), label: `${i + 1}. ${s}` }));
     const juzOptions = Array.from({ length: 30 }, (_, i) => ({ value: String(i), label: `Juz ${i + 1}` }));
+    const quarterOptions = Array.from({ length: 120 }, (_, i) => ({
+      value: String(i),
+      label: `Juz ${Math.floor(i / 4) + 1}, Q${(i % 4) + 1}`
+    }));
+
+    const accentColor = isSabak ? "#0d9488" : isSabakDhor ? "#7c3aed" : "#d97706";
 
     return (
       <div style={{ padding: "16px 16px 100px" }}>
         {/* Tab toggle */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
           {[
             { key: "sabak", label: "🧠 Sabak", sub: "New Lesson", bg: t.sabakBg },
-            { key: "dhor", label: "🔄 Sabak Dhor", sub: "Revision", bg: t.dhorBg },
+            { key: "sabakDhor", label: "🔄 Sabak Dhor", sub: "Revision", bg: t.dhorBg },
+            { key: "dhor", label: "📚 Dhor", sub: "By Quarter", bg: t.dhorSectionBg },
           ].map(tab => (
             <button key={tab.key} onClick={() => setSabakTab(tab.key)} style={{
-              flex: 1, padding: "14px 8px", borderRadius: 14, border: "none", cursor: "pointer",
+              flex: 1, padding: "12px 4px", borderRadius: 14, border: "none", cursor: "pointer",
               background: sabakTab === tab.key ? tab.bg : t.bgCard,
               color: sabakTab === tab.key ? "#fff" : t.textMuted,
               boxShadow: sabakTab === tab.key ? t.shadowLg : t.shadow,
               borderWidth: 1, borderStyle: "solid", borderColor: sabakTab === tab.key ? "transparent" : t.border,
               transition: "all 0.2s"
             }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>{tab.label}</div>
+              <div style={{ fontSize: 12, fontWeight: 700 }}>{tab.label}</div>
               <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>{tab.sub}</div>
             </button>
           ))}
@@ -439,11 +468,9 @@ export default function App() {
                 Last: {lastSabak.surahName}, Ayah {lastSabak.fromAyah}–{lastSabak.toAyah} ({lastSabak.date})
               </div>
             )}
-
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <Select theme={t} value={surahIdx} onChange={v => { setSurahIdx(v); if (!lastSabak || parseInt(v) !== lastSabak.surahIndex) setFromAyah("1"); setToAyah(""); }}
                 options={surahOptions} placeholder="Select Surah" style={{ width: "100%" }} />
-
               <div style={{ display: "flex", gap: 8 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 4 }}>From Ayah</div>
@@ -456,13 +483,11 @@ export default function App() {
                     placeholder="To" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `1px solid ${t.inputBorder}`, background: t.inputBg, color: t.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                 </div>
               </div>
-
               {fromAyah && toAyah && parseInt(toAyah) >= parseInt(fromAyah) && (
                 <div style={{ fontSize: 12, color: t.accent, fontWeight: 600 }}>
                   📝 {parseInt(toAyah) - parseInt(fromAyah) + 1} ayahs in this session
                 </div>
               )}
-
               <button onClick={handleSabakSubmit} disabled={!surahIdx || !fromAyah || !toAyah}
                 style={{
                   padding: 14, background: surahIdx && fromAyah && toAyah ? t.sabakBg : t.border,
@@ -477,11 +502,9 @@ export default function App() {
         )}
 
         {/* ── SABAK DHOR FORM ── */}
-        {!isSabak && (
+        {isSabakDhor && (
           <div style={{ background: t.bgCard, borderRadius: 16, padding: 20, marginBottom: 16, boxShadow: t.shadow, border: `1px solid ${t.border}` }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 12 }}>Log Today's Revision</div>
-
-            {/* Mode toggle */}
+            <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 12 }}>Log Today's Sabak Dhor</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
               {[
                 { key: "precise", label: "Surah + Ayah" },
@@ -495,7 +518,6 @@ export default function App() {
                 }}>{m.label}</button>
               ))}
             </div>
-
             {dhorMode === "precise" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <Select theme={t} value={dhorSurahIdx} onChange={v => { setDhorSurahIdx(v); setDhorFromAyah("1"); setDhorToAyah(""); }}
@@ -512,26 +534,44 @@ export default function App() {
                       placeholder="To" style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `1px solid ${t.inputBorder}`, background: t.inputBg, color: t.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                   </div>
                 </div>
-                <button onClick={handleDhorSubmit} disabled={!dhorSurahIdx || !dhorFromAyah || !dhorToAyah}
+                <button onClick={handleSabakDhorSubmit} disabled={!dhorSurahIdx || !dhorFromAyah || !dhorToAyah}
                   style={{
                     padding: 14, background: dhorSurahIdx && dhorFromAyah && dhorToAyah ? t.dhorBg : t.border,
                     color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700,
                     cursor: dhorSurahIdx && dhorFromAyah && dhorToAyah ? "pointer" : "not-allowed",
                     opacity: dhorSurahIdx && dhorFromAyah && dhorToAyah ? 1 : 0.5
-                  }}>✓ Log Revision</button>
+                  }}>✓ Log Sabak Dhor</button>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <Select theme={t} value={dhorJuzIdx} onChange={setDhorJuzIdx} options={juzOptions} placeholder="Select Juz" style={{ width: "100%" }} />
-                <button onClick={handleDhorSubmit} disabled={dhorJuzIdx === ""}
+                <button onClick={handleSabakDhorSubmit} disabled={dhorJuzIdx === ""}
                   style={{
                     padding: 14, background: dhorJuzIdx !== "" ? t.dhorBg : t.border,
                     color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700,
                     cursor: dhorJuzIdx !== "" ? "pointer" : "not-allowed",
                     opacity: dhorJuzIdx !== "" ? 1 : 0.5
-                  }}>✓ Log Revision</button>
+                  }}>✓ Log Sabak Dhor</button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── DHOR FORM (by quarter) ── */}
+        {isDhor && (
+          <div style={{ background: t.bgCard, borderRadius: 16, padding: 20, marginBottom: 16, boxShadow: t.shadow, border: `1px solid ${t.border}` }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 4 }}>Log Today's Dhor</div>
+            <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 12 }}>Select the quarter you revised</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <Select theme={t} value={dhorQuarterIdx} onChange={setDhorQuarterIdx} options={quarterOptions} placeholder="Select Quarter" style={{ width: "100%" }} />
+              <button onClick={handleDhorSubmit} disabled={dhorQuarterIdx === ""}
+                style={{
+                  padding: 14, background: dhorQuarterIdx !== "" ? t.dhorSectionBg : t.border,
+                  color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 700,
+                  cursor: dhorQuarterIdx !== "" ? "pointer" : "not-allowed",
+                  opacity: dhorQuarterIdx !== "" ? 1 : 0.5
+                }}>✓ Log Dhor</button>
+            </div>
           </div>
         )}
 
@@ -551,7 +591,7 @@ export default function App() {
           </div>
         )}
 
-        {!isSabak && (
+        {isSabakDhor && (
           <div style={{ background: t.dhorBg, borderRadius: 16, padding: 20, marginBottom: 16, color: "#fff" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <div>
@@ -571,14 +611,34 @@ export default function App() {
           </div>
         )}
 
-        {/* History */}
+        {isDhor && (
+          <div style={{ background: t.dhorSectionBg, borderRadius: 16, padding: 20, marginBottom: 16, color: "#fff" }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: 11, opacity: 0.7, letterSpacing: 1, textTransform: "uppercase" }}>Dhor Sessions</div>
+                <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.2 }}>{(data.dhor || []).length}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 11, opacity: 0.7, letterSpacing: 1, textTransform: "uppercase" }}>This Week</div>
+                <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.2 }}>
+                  {(data.dhor || []).filter(s => {
+                    const d = new Date(); d.setDate(d.getDate() - 7);
+                    return s.date >= d.toISOString().split("T")[0];
+                  }).length}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* History grouped by day */}
         <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 12 }}>
-          {isSabak ? "📜 Sabak History" : "📜 Revision History"}
+          {isSabak ? "📜 Sabak History" : isSabakDhor ? "📜 Sabak Dhor History" : "📜 Dhor History"}
         </div>
 
         {groupedEntries.length === 0 && (
           <div style={{ textAlign: "center", padding: 40, color: t.textMuted, fontSize: 13 }}>
-            No entries yet. Log your first {isSabak ? "sabak" : "revision"} above!
+            No entries yet. Log your first {isSabak ? "sabak" : isSabakDhor ? "sabak dhor" : "dhor"} above!
           </div>
         )}
 
@@ -591,19 +651,19 @@ export default function App() {
               <div key={i} style={{
                 background: t.bgCard, borderRadius: 12, padding: "12px 16px", marginBottom: 6,
                 border: `1px solid ${t.border}`, boxShadow: t.shadow,
-                borderLeft: `4px solid ${isSabak ? "#0d9488" : "#7c3aed"}`,
+                borderLeft: `4px solid ${accentColor}`,
                 display: "flex", justifyContent: "space-between", alignItems: "center"
               }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: t.text }}>
-                    {entry.type === "juz" ? entry.juzName : entry.surahName}
+                    {isDhor ? entry.quarterName : entry.type === "juz" ? entry.juzName : entry.surahName}
                   </div>
                   <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2 }}>
-                    {entry.type === "juz" ? "Full Juz revision" : `Ayah ${entry.fromAyah} – ${entry.toAyah}`}
+                    {isDhor ? "Quarter revision" : entry.type === "juz" ? "Full Juz revision" : `Ayah ${entry.fromAyah} – ${entry.toAyah}`}
                   </div>
                 </div>
-                {entry.type !== "juz" && (
-                  <div style={{ fontSize: 18, fontWeight: 800, color: isSabak ? "#0d9488" : "#7c3aed" }}>
+                {!isDhor && entry.type !== "juz" && (
+                  <div style={{ fontSize: 18, fontWeight: 800, color: accentColor }}>
                     {entry.toAyah - entry.fromAyah + 1}
                   </div>
                 )}
@@ -643,18 +703,23 @@ export default function App() {
       </div>
 
       {/* Sabak quick stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-        <div onClick={() => { setView("sabak"); setSabakTab("sabak"); }} style={{ background: t.sabakBg, borderRadius: 16, padding: 16, cursor: "pointer", color: "#fff" }}>
-          <div style={{ fontSize: 11, opacity: 0.7, textTransform: "uppercase", letterSpacing: 1 }}>Sabak</div>
-          <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.2, marginTop: 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
+        <div onClick={() => { setView("sabak"); setSabakTab("sabak"); }} style={{ background: t.sabakBg, borderRadius: 16, padding: 14, cursor: "pointer", color: "#fff" }}>
+          <div style={{ fontSize: 10, opacity: 0.7, textTransform: "uppercase", letterSpacing: 1 }}>Sabak</div>
+          <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.2, marginTop: 4 }}>
             {(data.sabak || []).reduce((a, s) => a + (s.toAyah - s.fromAyah + 1), 0)}
           </div>
-          <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>ayahs memorized</div>
+          <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>ayahs</div>
         </div>
-        <div onClick={() => { setView("sabak"); setSabakTab("dhor"); }} style={{ background: t.dhorBg, borderRadius: 16, padding: 16, cursor: "pointer", color: "#fff" }}>
-          <div style={{ fontSize: 11, opacity: 0.7, textTransform: "uppercase", letterSpacing: 1 }}>Sabak Dhor</div>
-          <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.2, marginTop: 4 }}>{(data.sabakDhor || []).length}</div>
-          <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>revision sessions</div>
+        <div onClick={() => { setView("sabak"); setSabakTab("sabakDhor"); }} style={{ background: t.dhorBg, borderRadius: 16, padding: 14, cursor: "pointer", color: "#fff" }}>
+          <div style={{ fontSize: 10, opacity: 0.7, textTransform: "uppercase", letterSpacing: 1 }}>Sabak Dhor</div>
+          <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.2, marginTop: 4 }}>{(data.sabakDhor || []).length}</div>
+          <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>sessions</div>
+        </div>
+        <div onClick={() => { setView("sabak"); setSabakTab("dhor"); }} style={{ background: t.dhorSectionBg, borderRadius: 16, padding: 14, cursor: "pointer", color: "#fff" }}>
+          <div style={{ fontSize: 10, opacity: 0.7, textTransform: "uppercase", letterSpacing: 1 }}>Dhor</div>
+          <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.2, marginTop: 4 }}>{(data.dhor || []).length}</div>
+          <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>quarters</div>
         </div>
       </div>
 
