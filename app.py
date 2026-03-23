@@ -4,6 +4,7 @@ from database import (
     init_db, get_all_transactions, update_transaction,
     get_spending_by_category, get_monthly_totals, get_last_sync,
     insert_transaction, log_sync,
+    get_custom_categories, add_custom_category, delete_custom_category,
 )
 from categories import CATEGORIES, CATEGORY_COLORS
 from datetime import datetime
@@ -13,6 +14,17 @@ init_db()
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
+def merged_categories():
+    """Hardcoded categories + any user-created custom ones."""
+    cats   = list(CATEGORIES)
+    colors = dict(CATEGORY_COLORS)
+    for c in get_custom_categories():
+        if c['name'] not in cats:
+            cats.append(c['name'])
+        colors[c['name']] = c['color']
+    return cats, colors
+
 
 def _prev_month(year, month):
     return (year - 1, 12) if month == 1 else (year, month - 1)
@@ -28,6 +40,8 @@ def dashboard():
     now = datetime.now()
     month = request.args.get('month', now.month, type=int)
     year  = request.args.get('year',  now.year,  type=int)
+
+    categories, category_colors = merged_categories()
 
     transactions    = get_all_transactions(month=month, year=year)
     category_totals = get_spending_by_category(month=month, year=year)
@@ -73,7 +87,8 @@ def dashboard():
         last_sync        = last_sync,
         chart_cat        = chart_cat,
         chart_monthly    = chart_monthly,
-        category_colors  = CATEGORY_COLORS,
+        categories       = categories,
+        category_colors  = category_colors,
     )
 
 
@@ -85,6 +100,7 @@ def transactions_page():
     category_filter = request.args.get('category', '')
     search          = request.args.get('search', '').strip()
 
+    categories, category_colors = merged_categories()
     all_tx = get_all_transactions(month=month, year=year) if month else get_all_transactions()
 
     if category_filter:
@@ -100,8 +116,8 @@ def transactions_page():
 
     return render_template('transactions.html',
         transactions    = all_tx,
-        categories      = CATEGORIES,
-        category_colors = CATEGORY_COLORS,
+        categories      = categories,
+        category_colors = category_colors,
         category_filter = category_filter,
         month           = month,
         year            = year,
@@ -116,6 +132,33 @@ def api_update(tx_id):
     update_transaction(tx_id,
                        data.get('category', 'Uncategorised'),
                        data.get('description', ''))
+    return jsonify({'ok': True})
+
+
+@app.route('/api/categories', methods=['GET'])
+def api_list_categories():
+    return jsonify(get_custom_categories())
+
+
+@app.route('/api/categories', methods=['POST'])
+def api_add_category():
+    data  = request.get_json() or {}
+    name  = (data.get('name') or '').strip()
+    color = data.get('color', '#6c757d')
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    if name in CATEGORIES:
+        return jsonify({'error': 'That category already exists'}), 409
+    if not add_custom_category(name, color):
+        return jsonify({'error': 'A category with that name already exists'}), 409
+    return jsonify({'name': name, 'color': color}), 201
+
+
+@app.route('/api/categories/<path:name>', methods=['DELETE'])
+def api_delete_category(name):
+    if name in CATEGORIES:
+        return jsonify({'error': 'Built-in categories cannot be deleted'}), 400
+    delete_custom_category(name)
     return jsonify({'ok': True})
 
 

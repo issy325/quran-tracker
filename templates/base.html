@@ -16,13 +16,18 @@
       <a class="navbar-brand fw-bold" href="/">
         <i class="bi bi-wallet2 me-2"></i>Spend Tracker
       </a>
-      <div class="d-flex gap-4">
+      <div class="d-flex gap-4 align-items-center">
         <a class="nav-link-app {% if active_page == 'dashboard' %}active{% endif %}" href="/">
           <i class="bi bi-speedometer2 me-1"></i>Dashboard
         </a>
         <a class="nav-link-app {% if active_page == 'transactions' %}active{% endif %}" href="/transactions">
           <i class="bi bi-list-ul me-1"></i>All Transactions
         </a>
+        <button class="btn btn-sm btn-outline-light ms-2"
+                data-bs-toggle="modal" data-bs-target="#manageCatsModal"
+                title="Manage categories" style="opacity:.75">
+          <i class="bi bi-gear"></i>
+        </button>
       </div>
     </div>
   </nav>
@@ -30,6 +35,46 @@
   <!-- Page content -->
   <div class="container-lg py-4">
     {% block content %}{% endblock %}
+  </div>
+
+  <!-- Manage Categories modal -->
+  <div class="modal fade" id="manageCatsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+
+        <div class="modal-header border-0">
+          <h6 class="modal-title fw-bold"><i class="bi bi-tags me-2"></i>Manage Categories</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body pt-0">
+
+          <!-- Add new -->
+          <p class="text-muted small mb-2">Add a new category</p>
+          <div class="d-flex gap-2 mb-3">
+            <input type="text" id="newCatName" class="form-control form-control-sm"
+                   placeholder="Category name…" maxlength="40">
+            <input type="color" id="newCatColor" class="form-control form-control-color form-control-sm"
+                   value="#6c757d" title="Pick a colour" style="width:42px;padding:2px 3px">
+            <button class="btn btn-sm btn-primary text-nowrap" onclick="addCustomCat()">
+              <i class="bi bi-plus-lg me-1"></i>Add
+            </button>
+          </div>
+
+          <hr class="my-2">
+
+          <!-- Existing custom categories -->
+          <p class="text-muted small mb-2">Your custom categories</p>
+          <div id="customCatList" style="max-height:260px;overflow-y:auto"></div>
+
+        </div>
+
+        <div class="modal-footer border-0 pt-0">
+          <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+
+      </div>
+    </div>
   </div>
 
   <!-- Save toast -->
@@ -62,6 +107,80 @@
       else       showToast('Error saving', 'danger');
     }
   </script>
+  <script>
+  // ── Category management ───────────────────────────────────────────────────
+
+  async function loadCustomCategories() {
+    const res  = await fetch('/api/categories');
+    const cats = await res.json();
+    const list = document.getElementById('customCatList');
+    if (!cats.length) {
+      list.innerHTML = '<p class="text-muted small fst-italic">No custom categories yet.</p>';
+      return;
+    }
+    list.innerHTML = cats.map(c => `
+      <div class="d-flex align-items-center gap-2 mb-2" id="ccat-${CSS.escape(c.name)}">
+        <span style="width:16px;height:16px;border-radius:50%;background:${c.color};
+                     display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,.1)"></span>
+        <span class="flex-grow-1 small">${c.name}</span>
+        <button class="btn btn-outline-danger" style="padding:1px 7px;font-size:.7rem"
+                onclick="deleteCustomCat('${c.name.replace(/'/g,"\\'")}')">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>`).join('');
+  }
+
+  async function addCustomCat() {
+    const nameEl  = document.getElementById('newCatName');
+    const colorEl = document.getElementById('newCatColor');
+    const name    = nameEl.value.trim();
+    const color   = colorEl.value;
+    if (!name) { nameEl.focus(); return; }
+
+    const res = await fetch('/api/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, color }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) { showToast(data.error || 'Error adding category', 'danger'); return; }
+
+    // Inject new option into every category dropdown on the page
+    document.querySelectorAll('.cat-select, #qnCategory').forEach(sel => {
+      if (![...sel.options].some(o => o.value === name)) {
+        sel.add(new Option(name, name));
+      }
+    });
+
+    nameEl.value = '';
+    loadCustomCategories();
+    showToast(`✓  "${name}" added`);
+  }
+
+  async function deleteCustomCat(name) {
+    const res = await fetch(`/api/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Error', 'danger'); return; }
+
+    // Remove from every dropdown
+    document.querySelectorAll('.cat-select, #qnCategory').forEach(sel => {
+      [...sel.options].forEach(o => { if (o.value === name) o.remove(); });
+    });
+
+    loadCustomCategories();
+    showToast(`"${name}" removed`);
+  }
+
+  // Allow pressing Enter in the name field to submit
+  document.getElementById('newCatName')
+    ?.addEventListener('keydown', e => { if (e.key === 'Enter') addCustomCat(); });
+
+  // Load custom list each time the modal opens
+  document.getElementById('manageCatsModal')
+    ?.addEventListener('show.bs.modal', loadCustomCategories);
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

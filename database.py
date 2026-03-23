@@ -111,6 +111,13 @@ def init_db():
                 transactions_skipped INTEGER DEFAULT 0
             )
         ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS custom_categories (
+                id    SERIAL PRIMARY KEY,
+                name  TEXT UNIQUE NOT NULL,
+                color TEXT NOT NULL DEFAULT \'#6c757d\'
+            )
+        ''')
     else:
         cur.execute('''
             CREATE TABLE IF NOT EXISTS transactions (
@@ -136,6 +143,13 @@ def init_db():
                 synced_at            TEXT DEFAULT (datetime('now')),
                 transactions_added   INTEGER DEFAULT 0,
                 transactions_skipped INTEGER DEFAULT 0
+            )
+        ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS custom_categories (
+                id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                name  TEXT UNIQUE NOT NULL,
+                color TEXT NOT NULL DEFAULT '#6c757d'
             )
         ''')
 
@@ -261,6 +275,49 @@ def get_last_sync():
     if r.get('synced_at') and hasattr(r['synced_at'], 'strftime'):
         r['synced_at'] = r['synced_at'].strftime('%Y-%m-%d %H:%M:%S')
     return r
+
+
+def get_custom_categories() -> list:
+    """Return all user-created categories as [{name, color}, …]."""
+    conn = get_db()
+    cur  = _cursor(conn)
+    cur.execute("SELECT name, color FROM custom_categories ORDER BY name ASC")
+    rows = [dict(r) for r in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return rows
+
+
+def add_custom_category(name: str, color: str) -> bool:
+    """Insert a new custom category. Returns False if name already exists."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            f"INSERT INTO custom_categories (name, color) VALUES ({PH}, {PH})",
+            (name, color)
+        )
+        conn.commit()
+        return True
+    except (
+        psycopg2.errors.UniqueViolation if USE_POSTGRES else sqlite3.IntegrityError
+    ):
+        if USE_POSTGRES:
+            conn.rollback()
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+
+def delete_custom_category(name: str):
+    """Remove a custom category by name."""
+    conn = get_db()
+    cur  = conn.cursor()
+    cur.execute(f"DELETE FROM custom_categories WHERE name = {PH}", (name,))
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 def log_sync(added: int, skipped: int):
