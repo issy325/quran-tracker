@@ -174,20 +174,38 @@
           <table class="table table-hover align-middle mb-0">
             <tbody>
               {% for tx in transactions %}
-              <tr>
+              <tr id="dash-row-{{ tx.id }}">
                 <td class="ps-3">
                   <div class="fw-semibold small">{{ tx.merchant }}</div>
                   <div class="text-muted" style="font-size:.75rem">{{ tx.date }}
-                    {% if tx.description %} · <em>{{ tx.description }}</em>{% endif %}
+                    {% if tx.description %}
+                      · <em class="dash-note-{{ tx.id }}">{{ tx.description }}</em>
+                    {% else %}
+                      <em class="dash-note-{{ tx.id }} text-muted fst-italic"></em>
+                    {% endif %}
                   </div>
                 </td>
                 <td>
-                  <span class="badge rounded-pill"
+                  <span class="badge rounded-pill dash-cat-badge-{{ tx.id }}"
                         style="background:{{ category_colors.get(tx.category,'#adb5bd') }};font-size:.7rem">
                     {{ tx.category }}
                   </span>
                 </td>
-                <td class="text-end pe-3 fw-bold">R{{ "%.2f"|format(tx.amount) }}</td>
+                <td class="text-end fw-bold">R{{ "%.2f"|format(tx.amount) }}</td>
+                <td class="pe-3 text-end">
+                  <button class="btn btn-sm btn-outline-secondary quick-note-btn"
+                          style="padding:2px 7px"
+                          data-id="{{ tx.id }}"
+                          data-merchant="{{ tx.merchant }}"
+                          data-amount="R{{ '%.2f'|format(tx.amount) }}"
+                          data-category="{{ tx.category }}"
+                          data-description="{{ tx.description or '' }}"
+                          data-bs-toggle="modal"
+                          data-bs-target="#quickNoteModal"
+                          title="Add / edit note">
+                    <i class="bi bi-pencil" style="font-size:.75rem"></i>
+                  </button>
+                </td>
               </tr>
               {% endfor %}
             </tbody>
@@ -204,12 +222,90 @@
   </div>
 
 </div>
+
+{# ── Quick-note modal ── #}
+<div class="modal fade" id="quickNoteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <div>
+          <h6 class="modal-title fw-bold mb-0" id="qnMerchant"></h6>
+          <small class="text-muted" id="qnAmount"></small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <input type="hidden" id="qnId">
+
+        <label class="form-label small text-muted mb-1">Category</label>
+        <select class="form-select form-select-sm mb-3" id="qnCategory">
+          {% for cat in category_colors %}
+            <option value="{{ cat }}">{{ cat }}</option>
+          {% endfor %}
+        </select>
+
+        <label class="form-label small text-muted mb-1">Note</label>
+        <input type="text" class="form-control" id="qnNote"
+               placeholder="e.g. petrol for trip, birthday dinner…"
+               maxlength="120">
+        <div class="form-text">Press Enter or click Save to store.</div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="qnSaveBtn">
+          <i class="bi bi-check2 me-1"></i>Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-const catData    = {{ chart_cat    | tojson }};
-const monthData  = {{ chart_monthly | tojson }};
+const catData      = {{ chart_cat     | tojson }};
+const monthData    = {{ chart_monthly  | tojson }};
+const catColors    = {{ category_colors | tojson }};
+
+// ── Quick-note modal ──────────────────────────────────────────────────────────
+document.querySelectorAll('.quick-note-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('qnId').value          = btn.dataset.id;
+    document.getElementById('qnMerchant').textContent = btn.dataset.merchant;
+    document.getElementById('qnAmount').textContent   = btn.dataset.amount;
+    document.getElementById('qnNote').value           = btn.dataset.description;
+    const sel = document.getElementById('qnCategory');
+    sel.value = btn.dataset.category;
+    // Focus note field after modal opens
+    document.getElementById('quickNoteModal')
+      .addEventListener('shown.bs.modal', () => document.getElementById('qnNote').focus(), { once: true });
+  });
+});
+
+async function saveQuickNote() {
+  const id   = document.getElementById('qnId').value;
+  const cat  = document.getElementById('qnCategory').value;
+  const note = document.getElementById('qnNote').value.trim();
+  await saveRow(id, cat, note);
+  // Update the row in place without a page reload
+  const noteEl = document.querySelector(`.dash-note-${id}`);
+  if (noteEl) noteEl.textContent = note ? `· ${note}` : '';
+  const badge = document.querySelector(`.dash-cat-badge-${id}`);
+  if (badge) {
+    badge.textContent    = cat;
+    badge.style.background = catColors[cat] || '#adb5bd';
+  }
+  // Update button's data attrs so re-opening shows current values
+  const btn = document.querySelector(`.quick-note-btn[data-id="${id}"]`);
+  if (btn) { btn.dataset.description = note; btn.dataset.category = cat; }
+  bootstrap.Modal.getInstance(document.getElementById('quickNoteModal')).hide();
+}
+
+document.getElementById('qnSaveBtn').addEventListener('click', saveQuickNote);
+document.getElementById('qnNote').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveQuickNote();
+});
 
 // ── Doughnut chart ──
 if (catData.labels.length) {
