@@ -1,0 +1,25 @@
+# Local database (replaced by cloud Supabase DB)
+spending.db
+
+# Sync import file (temporary, written by Claude during sync)
+transactions_to_import.json
+
+# Environment variables (contains secrets — never commit this)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code local config (tool-specific, not needed in repo)
+.claude/settings.local.json

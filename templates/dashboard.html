@@ -1,0 +1,260 @@
+{% extends 'base.html' %}
+{% set active_page = 'dashboard' %}
+{% block title %}Dashboard – Spend Tracker{% endblock %}
+
+{% block content %}
+
+{# ── Header row ── #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h4 class="fw-bold mb-0">{{ month_name }}</h4>
+    {% if last_sync %}
+      <small class="text-muted">Last synced {{ last_sync.synced_at }}</small>
+    {% else %}
+      <small class="text-muted">Ask Claude to sync your transactions to get started</small>
+    {% endif %}
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <a href="/?month={{ prev[1] }}&year={{ prev[0] }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-chevron-left"></i>
+    </a>
+    {% if nxt %}
+      <a href="/?month={{ nxt[1] }}&year={{ nxt[0] }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    {% else %}
+      <button class="btn btn-sm btn-outline-secondary" disabled>
+        <i class="bi bi-chevron-right"></i>
+      </button>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Summary cards ── #}
+<div class="row g-3 mb-4">
+
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="card-label"><i class="bi bi-cash-stack me-1"></i>Total Spent</div>
+        <div class="card-value">R{{ "%.2f"|format(total_spent) }}</div>
+        <div class="card-sub">{{ tx_count }} transaction{{ 's' if tx_count != 1 }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="card-label"><i class="bi bi-bank me-1"></i>Available Balance</div>
+        {% if latest_balance %}
+          <div class="card-value text-success">R{{ "{:,.0f}".format(latest_balance) }}</div>
+        {% else %}
+          <div class="card-value text-muted">—</div>
+        {% endif %}
+        <div class="card-sub">from latest transaction</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="card-label"><i class="bi bi-trophy me-1"></i>Top Category</div>
+        {% if category_totals %}
+          <div class="card-value fs-5">{{ category_totals[0].category }}</div>
+          <div class="card-sub">R{{ "%.2f"|format(category_totals[0].total) }}</div>
+        {% else %}
+          <div class="card-value text-muted">—</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="card-label"><i class="bi bi-calculator me-1"></i>Daily Average</div>
+        {% if total_spent > 0 %}
+          <div class="card-value">R{{ "%.0f"|format(total_spent / 30) }}</div>
+        {% else %}
+          <div class="card-value text-muted">—</div>
+        {% endif %}
+        <div class="card-sub">per day this month</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Charts row ── #}
+<div class="row g-3 mb-4">
+
+  <div class="col-md-5">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="section-title">Spending by Category</div>
+        {% if category_totals %}
+          <div style="height:280px;position:relative;">
+            <canvas id="catChart"></canvas>
+          </div>
+        {% else %}
+          <div class="empty-state">
+            <i class="bi bi-pie-chart fs-1 d-block mb-2"></i>
+            No data for this month yet
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-7">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="section-title">Monthly Spending Trend</div>
+        {% if chart_monthly.labels %}
+          <div style="height:280px;position:relative;">
+            <canvas id="monthChart"></canvas>
+          </div>
+        {% else %}
+          <div class="empty-state">
+            <i class="bi bi-graph-up fs-1 d-block mb-2"></i>
+            No data yet
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Bottom row: category table + recent transactions ── #}
+<div class="row g-3">
+
+  {# Category breakdown #}
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <div class="section-title">Category Breakdown</div>
+        {% if category_totals %}
+          <table class="table table-sm mb-0">
+            <tbody>
+              {% for cat in category_totals %}
+              <tr>
+                <td>
+                  <span class="dot me-1" style="background:{{ cat.color }}"></span>
+                  {{ cat.category }}
+                </td>
+                <td class="text-end fw-semibold">R{{ "%.2f"|format(cat.total) }}</td>
+                <td class="text-end text-muted small">{{ cat.count }}×</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-muted small mt-2">No data for this month.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Recent transactions #}
+  <div class="col-md-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body pb-0">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="section-title mb-0">Recent Transactions</div>
+          <a href="/transactions?month={{ month }}&year={{ year }}" class="btn btn-sm btn-outline-primary">
+            View All
+          </a>
+        </div>
+      </div>
+      {% if transactions %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <tbody>
+              {% for tx in transactions %}
+              <tr>
+                <td class="ps-3">
+                  <div class="fw-semibold small">{{ tx.merchant }}</div>
+                  <div class="text-muted" style="font-size:.75rem">{{ tx.date }}
+                    {% if tx.description %} · <em>{{ tx.description }}</em>{% endif %}
+                  </div>
+                </td>
+                <td>
+                  <span class="badge rounded-pill"
+                        style="background:{{ category_colors.get(tx.category,'#adb5bd') }};font-size:.7rem">
+                    {{ tx.category }}
+                  </span>
+                </td>
+                <td class="text-end pe-3 fw-bold">R{{ "%.2f"|format(tx.amount) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state py-5">
+          <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+          No transactions this month.<br>
+          <small>Ask Claude to sync your FNB emails.</small>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const catData    = {{ chart_cat    | tojson }};
+const monthData  = {{ chart_monthly | tojson }};
+
+// ── Doughnut chart ──
+if (catData.labels.length) {
+  new Chart(document.getElementById('catChart'), {
+    type: 'doughnut',
+    data: {
+      labels: catData.labels,
+      datasets: [{ data: catData.data, backgroundColor: catData.colors, borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => ` R${c.parsed.toFixed(2)}` } }
+      }
+    }
+  });
+}
+
+// ── Bar chart ──
+if (monthData.labels.length) {
+  new Chart(document.getElementById('monthChart'), {
+    type: 'bar',
+    data: {
+      labels: monthData.labels,
+      datasets: [{
+        label: 'Total Spend',
+        data: monthData.data,
+        backgroundColor: 'rgba(26,60,94,0.75)',
+        borderColor: 'rgba(26,60,94,1)',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ` R${c.parsed.y.toFixed(2)}` } }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => `R${v}` } }
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

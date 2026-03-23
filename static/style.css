@@ -1,0 +1,95 @@
+/* ── Navbar ── */
+.navbar-app {
+  background-color: #1a3c5e;
+  padding: .75rem 1rem;
+}
+.nav-link-app {
+  color: rgba(255,255,255,.6);
+  text-decoration: none;
+  font-size: .9rem;
+  transition: color .15s;
+}
+.nav-link-app:hover,
+.nav-link-app.active {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ── Summary cards ── */
+.card-label {
+  font-size: .78rem;
+  color: #6c757d;
+  margin-bottom: .25rem;
+}
+.card-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #1a3c5e;
+}
+.card-sub {
+  font-size: .75rem;
+  color: #adb5bd;
+  margin-top: .2rem;
+}
+
+/* ── Section titles ── */
+.section-title {
+  font-size: .8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #6c757d;
+  margin-bottom: .75rem;
+}
+
+/* ── Category colour dot ── */
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  text-align: center;
+  color: #adb5bd;
+  padding: 2rem 1rem;
+}
+
+/* ── Table tweaks ── */
+.table > tbody > tr > td {
+  vertical-align: middle;
+  padding-top: .6rem;
+  padding-bottom: .6rem;
+}
+.table-hover > tbody > tr:hover {
+  background-color: #f0f4f8;
+}
+
+/* ── Category select border colour trick ── */
+.cat-select {
+  font-size: .8rem;
+  border-width: 2px;
+  border-radius: 6px;
+}
+.cat-select:focus {
+  box-shadow: none;
+}
+
+/* ── Description input ── */
+.desc-input {
+  font-size: .82rem;
+  border-color: #dee2e6;
+}
+.desc-input:focus {
+  border-color: #1a3c5e;
+  box-shadow: 0 0 0 .15rem rgba(26,60,94,.15);
+}
+
+/* ── General card polish ── */
+.card {
+  border-radius: 12px;
+}
